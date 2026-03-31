@@ -57,14 +57,14 @@ public class Resource {
     @Column(nullable = false)
     private ResourceStatus status;
 
-    @ElementCollection
+    @ElementCollection(fetch = jakarta.persistence.FetchType.EAGER)
     @CollectionTable(name = "resource_amenities", joinColumns = @JoinColumn(name = "resource_id"))
     @Column(name = "amenity")
     private List<String> amenities;
 
     private String imageUrl;
 
-    @ElementCollection
+    @ElementCollection(fetch = jakarta.persistence.FetchType.EAGER)
     @CollectionTable(name = "resource_tags", joinColumns = @JoinColumn(name = "resource_id"))
     @Column(name = "tag")
     private List<String> tags;
@@ -76,6 +76,15 @@ public class Resource {
     @Builder.Default
     @Column(nullable = false)
     private boolean archived = false;
+
+    // FIX: qrCode field — unique token generated on resource creation
+    @Column(unique = true)
+    private String qrCode;
+
+    // availabilityWindows — used by Module B to validate booking slots
+    // Stored as a simple JSON string for now (no extra entity needed)
+    @Column(columnDefinition = "TEXT")
+    private String availabilityWindows;
 
     @CreationTimestamp
     @Column(updatable = false)
