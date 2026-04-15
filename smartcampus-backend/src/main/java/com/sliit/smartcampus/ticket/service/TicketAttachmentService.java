@@ -28,25 +28,38 @@ public class TicketAttachmentService {
 
     private final String uploadDir = System.getProperty("user.dir") + "/uploads/";
 
-    private String getCurrentUserId() {
+    // Get current user
+    private UserPrincipal getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth == null || !(auth.getPrincipal() instanceof UserPrincipal user)) {
             throw new RuntimeException("Unauthorized user");
         }
 
-        return user.getId().toString();
+        return user;
     }
 
+    private String getCurrentUserId() {
+        return getCurrentUser().getId().toString();
+    }
+
+    // UPLOAD (Owner + Technician + Admin)
     public TicketAttachment uploadFile(String ticketId, MultipartFile file) throws IOException {
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        if (!ticket.getReportedBy().equals(getCurrentUserId())) {
+        UserPrincipal user = getCurrentUser();
+
+        boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
+        boolean isTechnician = user.getRole().equals("TECHNICIAN");
+        boolean isAdmin = user.getRole().equals("ADMIN");
+
+        if (!isOwner && !isTechnician && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
+        // validations
         if (attachmentRepository.countByTicketId(ticketId) >= 3) {
             throw new RuntimeException("Max 3 files allowed");
         }
@@ -78,12 +91,18 @@ public class TicketAttachmentService {
         return attachmentRepository.save(attachment);
     }
 
+    // DELETE (Owner + Admin)
     public void deleteAttachment(String attachmentId) {
 
         TicketAttachment attachment = attachmentRepository.findById(attachmentId)
                 .orElseThrow(() -> new RuntimeException("Attachment not found"));
 
-        if (!attachment.getTicket().getReportedBy().equals(getCurrentUserId())) {
+        UserPrincipal user = getCurrentUser();
+
+        boolean isOwner = attachment.getTicket().getReportedBy().equals(user.getId().toString());
+        boolean isAdmin = user.getRole().equals("ADMIN");
+
+        if (!isOwner && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
@@ -93,12 +112,19 @@ public class TicketAttachmentService {
         attachmentRepository.deleteById(attachmentId);
     }
 
+    // GET (Owner + Technician + Admin)
     public List<TicketAttachment> getAttachmentsByTicket(String ticketId) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        if (!ticket.getReportedBy().equals(getCurrentUserId())) {
+        UserPrincipal user = getCurrentUser();
+
+        boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
+        boolean isTechnician = user.getRole().equals("TECHNICIAN");
+        boolean isAdmin = user.getRole().equals("ADMIN");
+
+        if (!isOwner && !isTechnician && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 

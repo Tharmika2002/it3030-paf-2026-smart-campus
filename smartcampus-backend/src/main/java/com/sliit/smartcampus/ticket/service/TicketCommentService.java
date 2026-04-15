@@ -22,23 +22,34 @@ public class TicketCommentService {
     @Autowired
     private TicketRepository ticketRepository;
 
-    private String getCurrentUserId() {
+    // Get current user object
+    private UserPrincipal getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth == null || !(auth.getPrincipal() instanceof UserPrincipal user)) {
             throw new RuntimeException("Unauthorized user");
         }
 
-        return user.getId().toString();
+        return user;
     }
 
-    // ADD COMMENT
+    private String getCurrentUserId() {
+        return getCurrentUser().getId().toString();
+    }
+
+    // ADD COMMENT (Owner + Technician + Admin)
     public TicketComment addComment(String ticketId, TicketComment comment) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        if (!ticket.getReportedBy().equals(getCurrentUserId())) {
+        UserPrincipal user = getCurrentUser();
+
+        boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
+        boolean isTechnician = user.getRole().equals("TECHNICIAN");
+        boolean isAdmin = user.getRole().equals("ADMIN");
+
+        if (!isOwner && !isTechnician && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
@@ -48,20 +59,26 @@ public class TicketCommentService {
         return commentRepository.save(comment);
     }
 
-    // GET COMMENTS
+    // GET COMMENTS (Owner + Technician + Admin)
     public List<TicketComment> getComments(String ticketId) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        if (!ticket.getReportedBy().equals(getCurrentUserId())) {
+        UserPrincipal user = getCurrentUser();
+
+        boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
+        boolean isTechnician = user.getRole().equals("TECHNICIAN");
+        boolean isAdmin = user.getRole().equals("ADMIN");
+
+        if (!isOwner && !isTechnician && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
         return commentRepository.findByTicketId(ticketId);
     }
 
-    // UPDATE
+    // UPDATE (ONLY AUTHOR)
     public TicketComment updateComment(String id, String content) {
 
         TicketComment comment = commentRepository.findById(id)
@@ -76,7 +93,7 @@ public class TicketCommentService {
         return commentRepository.save(comment);
     }
 
-    // DELETE
+    // DELETE (ONLY AUTHOR)
     public void deleteComment(String id) {
 
         TicketComment comment = commentRepository.findById(id)
