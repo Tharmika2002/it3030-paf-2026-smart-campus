@@ -56,12 +56,10 @@ public class ResourceService {
         Resource resource = resourceMapper.toEntity(dto);
         resource.setArchived(false);
 
-        // Generate unique QR code token on creation
         resource.setQrCode(java.util.UUID.randomUUID().toString());
 
         Resource saved = resourceRepository.save(resource);
 
-        // Flush to DB so Hibernate populates @CreationTimestamp and @UpdateTimestamp
         entityManager.flush();
         entityManager.refresh(saved);
         final Resource finalSaved = saved;
@@ -211,34 +209,40 @@ public class ResourceService {
         }
 
         try {
-            // FIX 1: Build context map using safe null-tolerant values (avoids NPE
-            //         inside Map.of / HashMap when entity fields are null).
+            // FIX 1: Added capacity to context so AI can match people/capacity queries
             List<Map<String, Object>> context = new ArrayList<>();
             for (int i = 0; i < resources.size(); i++) {
                 Resource r = resources.get(i);
                 Map<String, Object> item = new HashMap<>();
-                item.put("index", i);
-                item.put("name",      r.getName()     != null ? r.getName()              : "");
-                item.put("type",      r.getType()     != null ? r.getType().name()        : "");
-                item.put("location",  r.getLocation() != null ? r.getLocation()           : "");
-                item.put("amenities", r.getAmenities()!= null ? r.getAmenities()          : List.of());
+                item.put("index",    i);
+                item.put("name",     r.getName()     != null ? r.getName()         : "");
+                item.put("type",     r.getType()     != null ? r.getType().name()  : "");
+                item.put("location", r.getLocation() != null ? r.getLocation()     : "");
+                item.put("capacity", r.getCapacity() != null ? r.getCapacity()     : 0);
+                item.put("amenities",r.getAmenities()!= null ? r.getAmenities()    : List.of());
                 context.add(item);
             }
 
             String jsonResources = objectMapper.writeValueAsString(context);
             log.info("AI search prompt built with {} resources.", context.size());
 
-            String prompt = "You are an AI assistant.\n\n" +
-                    "Resources: " + jsonResources + "\n\n" +
+            String prompt = "You are a campus resource search assistant.\n\n" +
+                    "Available resources (each has an index, name, type, location, capacity, amenities):\n" +
+                    jsonResources + "\n\n" +
                     "User query: '" + query + "'\n\n" +
-                    "Return ONLY valid JSON:\n\n" +
-                    "{\"matchedIndexes\": [0,1]}\n\n" +
-                    "Rules:\n* No explanation\n* No markdown\n* Only JSON output";
+                    "Task: Find ALL resources that satisfy EVERY condition mentioned in the query.\n" +
+                    "Rules for matching:\n" +
+                    "* Vague location words like 'somewhere', 'anywhere', 'a place', 'a room', 'any' mean NO location filter — ignore them\n" +
+                    "* Only apply a location filter if the query mentions a specific place like 'Block A', 'F1304', 'Building 2' etc.\n" +
+                    "* If query mentions amenities (e.g. projector, AC, whiteboard), the resource must have ALL of them in its amenities list — match case-insensitively\n" +
+                    "* If query mentions capacity or number of people, the resource capacity must be >= that number\n" +
+                    "* If query mentions a type (lab, lecture hall, meeting room), match the type field\n" +
+                    "* Only include a resource if it satisfies ALL conditions in the query — do not include partial matches\n" +
+                    "* If no resources match, return an empty array: {\"matchedIndexes\": []}\n\n" ;
 
             String aiResponseRaw = aiService.callAI(prompt);
             log.info("AI RAW RESPONSE (Search): {}", aiResponseRaw);
 
-            // FIX 2: Validate before parsing — empty / too-short / no JSON structure
             if (aiResponseRaw == null || aiResponseRaw.trim().isEmpty()
                     || aiResponseRaw.length() < 5
                     || !aiResponseRaw.contains("{")) {
@@ -246,7 +250,6 @@ public class ResourceService {
                 return fallbackSearch(query);
             }
 
-            // FIX 3: Use the improved safeExtractJson that also strips markdown fences
             String cleaned = safeExtractJson(aiResponseRaw);
             if ("{}".equals(cleaned)) {
                 log.warn("safeExtractJson could not extract valid JSON. Triggering fallback.");
@@ -261,8 +264,6 @@ public class ResourceService {
                 return fallbackSearch(query);
             }
 
-            // FIX 4: Use isMissingNode() — node.get("key") returns MissingNode (never null)
-            //         so a == null check always evaluates to false.
             if (node == null || node.isMissingNode()
                     || !node.has("matchedIndexes")
                     || !node.get("matchedIndexes").isArray()) {
@@ -281,17 +282,13 @@ public class ResourceService {
             }
             log.info("Parsed AI match indexes: {}", indexes);
 
+            // FIX 2: Empty array from AI = valid "no match" — do NOT fallback
             List<ResourceResponseDTO> result = indexes.stream()
                     .map(resources::get)
                     .map(resourceMapper::toDTO)
                     .collect(Collectors.toList());
 
-            if (result.isEmpty()) {
-                log.warn("No valid indexes matched. Triggering fallback.");
-                return fallbackSearch(query);
-            }
-
-            log.info("AI search completed successfully with {} matches", result.size());
+            log.info("AI search completed with {} matches", result.size());
             return result;
 
         } catch (Exception e) {
@@ -321,10 +318,8 @@ public class ResourceService {
 
     @Transactional(readOnly = true)
     public AnalyticsDTO getResourceAnalytics(UUID id) {
-        // Load the real resource from DB
         Resource resource = getResourceEntityById(id);
 
-        // Build real context from the resource fields
         String resourceName     = resource.getName()     != null ? resource.getName()         : "Unknown";
         String resourceType     = resource.getType()     != null ? resource.getType().name()  : "Unknown";
         String resourceLocation = resource.getLocation() != null ? resource.getLocation()     : "Unknown";
@@ -334,7 +329,6 @@ public class ResourceService {
         String tags             = resource.getTags()     != null ? resource.getTags().toString()      : "[]";
         String aiSummary        = resource.getAiSummary()!= null ? resource.getAiSummary()            : "";
 
-        // Count similar active resources of the same type for utilization context
         long totalSameType   = resourceRepository.findByTypeAndArchivedFalse(resource.getType()).size();
         long activeSameType  = resourceRepository.findByTypeAndArchivedFalse(resource.getType())
                 .stream()
@@ -406,7 +400,7 @@ public class ResourceService {
 
             log.info("AI Analytics completed successfully for resource: {}", resourceName);
             return AnalyticsDTO.builder()
-                    .totalBookings(0)         // no Booking entity yet
+                    .totalBookings(0)
                     .utilizationRate(utilizationRate)
                     .aiInsight(insight)
                     .prediction(prediction)
@@ -445,8 +439,6 @@ public class ResourceService {
                 .collect(Collectors.toList());
 
         try {
-            // FIX 7: Replace Map.of() with HashMap so null values are tolerated.
-            //         Map.of() throws NullPointerException on any null value.
             List<Map<String, Object>> alternativesList = available.stream()
                     .map(r -> {
                         Map<String, Object> m = new HashMap<>();
@@ -470,7 +462,6 @@ public class ResourceService {
             String aiResponse = aiService.callAI(prompt);
             log.info("AI RAW RESPONSE (Recommendation): {}", aiResponse);
 
-            // FIX 8: Stricter validation — also check for markdown fences and min length
             if (aiResponse == null || aiResponse.trim().isEmpty()
                     || aiResponse.trim().startsWith("```")
                     || aiResponse.length() < 5) {
@@ -508,24 +499,11 @@ public class ResourceService {
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Extracts the first valid JSON object string from an AI response.
-     * <p>
-     * Handles:
-     * <ul>
-     *   <li>Markdown fences:  ```json { ... } ```</li>
-     *   <li>Leading/trailing text around the JSON object</li>
-     *   <li>Null or empty input</li>
-     * </ul>
-     * Returns "{}" as a safe sentinel when no valid object is found.
-     */
     private String safeExtractJson(String response) {
         if (response == null || response.trim().isEmpty()) {
             return "{}";
         }
         try {
-            // FIX 9: Strip markdown code fences before looking for braces.
-            //         AI models frequently wrap JSON in ```json ... ``` even when told not to.
             String cleaned = response
                     .replaceAll("(?s)```json\\s*", "")
                     .replaceAll("(?s)```\\s*",      "")
