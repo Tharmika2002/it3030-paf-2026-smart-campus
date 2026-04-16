@@ -11,91 +11,93 @@ import ResourceCataloguePage from './pages/resources/ResourceCataloguePage'
 import ResourceDetailPage from './pages/resources/ResourceDetailPage'
 import ResourceFormPage from './pages/resources/ResourceFormPage'
 import PlaceholderPage from './pages/PlaceholderPage'
+import UsersPage from './pages/admin/UsersPage'
+import NotificationsPage from './pages/NotificationsPage'
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: '#16162a',
-                color: '#e2e8f0',
-                border: '1px solid #2a2a45',
-                borderRadius: '12px',
-                fontSize: '13px',
-                fontFamily: 'DM Sans, sans-serif',
-              },
-              success: { iconTheme: { primary: '#6366f1', secondary: 'white' } },
-              error: { iconTheme: { primary: '#ef4444', secondary: 'white' } },
-            }}
-          />
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Toaster
+                position="top-right"
+                toastOptions={{
+                  style: {
+                    background: '#16162a',
+                    color: '#e2e8f0',
+                    border: '1px solid #2a2a45',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontFamily: 'DM Sans, sans-serif',
+                  },
+                  success: { iconTheme: { primary: '#6366f1', secondary: 'white' } },
+                  error: { iconTheme: { primary: '#ef4444', secondary: 'white' } },
+                }}
+            />
 
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/oauth2/callback" element={<OAuthCallback />} />
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/oauth2/callback" element={<OAuthCallback />} />
 
-            {/* Protected routes */}
-            <Route path="/dashboard" element={
-              <ProtectedRoute><DashboardPage /></ProtectedRoute>
-            } />
+              {/* Protected routes */}
+              <Route path="/dashboard" element={
+                <ProtectedRoute><DashboardPage /></ProtectedRoute>
+              } />
 
-            {/* Module A — Resources */}
-            <Route path="/resources" element={
-              <ProtectedRoute><ResourceCataloguePage /></ProtectedRoute>
-            } />
-            <Route path="/resources/new" element={
-              <ProtectedRoute requiredRole="ADMIN"><ResourceFormPage /></ProtectedRoute>
-            } />
-            <Route path="/resources/:id" element={
-              <ProtectedRoute><ResourceDetailPage /></ProtectedRoute>
-            } />
-            <Route path="/resources/:id/edit" element={
-              <ProtectedRoute requiredRole="ADMIN"><ResourceFormPage /></ProtectedRoute>
-            } />
+              {/* Module A — Resources */}
+              <Route path="/resources" element={
+                <ProtectedRoute><ResourceCataloguePage /></ProtectedRoute>
+              } />
+              <Route path="/resources/new" element={
+                <ProtectedRoute requiredRole="ADMIN"><ResourceFormPage /></ProtectedRoute>
+              } />
+              <Route path="/resources/:id" element={
+                <ProtectedRoute><ResourceDetailPage /></ProtectedRoute>
+              } />
+              <Route path="/resources/:id/edit" element={
+                <ProtectedRoute requiredRole="ADMIN"><ResourceFormPage /></ProtectedRoute>
+              } />
 
-            {/* Module B — Bookings (placeholder) */}
-            <Route path="/bookings/*" element={
-              <ProtectedRoute>
-                <PlaceholderPage title="Bookings" subtitle="Manage your room and equipment bookings" />
-              </ProtectedRoute>
-            } />
+              {/* Module B — Bookings (placeholder) */}
+              <Route path="/bookings/*" element={
+                <ProtectedRoute>
+                  <PlaceholderPage title="Bookings" subtitle="Manage your room and equipment bookings" />
+                </ProtectedRoute>
+              } />
 
-            {/* Module C — Tickets (placeholder) */}
-            <Route path="/tickets/*" element={
-              <ProtectedRoute>
-                <PlaceholderPage title="Tickets" subtitle="Report and track maintenance incidents" />
-              </ProtectedRoute>
-            } />
+              {/* Module C — Tickets (placeholder) */}
+              <Route path="/tickets/*" element={
+                <ProtectedRoute>
+                  <PlaceholderPage title="Tickets" subtitle="Report and track maintenance incidents" />
+                </ProtectedRoute>
+              } />
 
-            {/* Module D — Notifications (placeholder) */}
-            <Route path="/notifications" element={
-              <ProtectedRoute>
-                <PlaceholderPage title="Notifications" subtitle="Your activity and alerts" />
-              </ProtectedRoute>
-            } />
+              {/* Module D — Notifications */}
+              <Route path="/notifications" element={
+                <ProtectedRoute>
+                  <NotificationsPage />
+                </ProtectedRoute>
+              } />
 
-            {/* Admin routes (placeholder) */}
-            <Route path="/admin/users" element={
-              <ProtectedRoute requiredRole="ADMIN">
-                <PlaceholderPage title="User Management" subtitle="Manage campus users and roles" />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/analytics" element={
-              <ProtectedRoute requiredRole="MANAGER">
-                <PlaceholderPage title="Analytics" subtitle="Campus usage insights and reports" />
-              </ProtectedRoute>
-            } />
+              {/* Admin routes */}
+              <Route path="/admin/users" element={
+                <ProtectedRoute requiredRole="ADMIN">
+                  <UsersPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/analytics" element={
+                <ProtectedRoute requiredRole="MANAGER">
+                  <PlaceholderPage title="Analytics" subtitle="Campus usage insights and reports" />
+                </ProtectedRoute>
+              } />
 
-            {/* Redirects */}
-            <Route path="/" element={<Navigate to="/resources" replace />} />
-            <Route path="*" element={<Navigate to="/resources" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
+              {/* Redirects */}
+              <Route path="/" element={<Navigate to="/resources" replace />} />
+              <Route path="*" element={<Navigate to="/resources" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
   )
 }
