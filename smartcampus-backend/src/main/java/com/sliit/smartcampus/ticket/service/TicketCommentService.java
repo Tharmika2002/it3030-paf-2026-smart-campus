@@ -1,6 +1,9 @@
 package com.sliit.smartcampus.ticket.service;
 
 import com.sliit.smartcampus.auth.UserPrincipal;
+import com.sliit.smartcampus.notification.NotificationService;
+import com.sliit.smartcampus.notification.NotificationType;
+import com.sliit.smartcampus.notification.ReferenceType;
 import com.sliit.smartcampus.ticket.entity.Ticket;
 import com.sliit.smartcampus.ticket.entity.TicketComment;
 import com.sliit.smartcampus.ticket.repository.TicketCommentRepository;
@@ -9,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,6 +22,9 @@ public class TicketCommentService {
 
     @Autowired
     private TicketCommentRepository commentRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Autowired
     private TicketRepository ticketRepository;
@@ -43,6 +50,10 @@ public class TicketCommentService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
+        if (ticket.getStatus().equals("REJECTED") || ticket.getStatus().equals("CLOSED")) {
+            throw new RuntimeException("Cannot add comment to rejected/closed ticket");
+        }
+
         UserPrincipal user = getCurrentUser();
 
         boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
@@ -56,7 +67,18 @@ public class TicketCommentService {
         comment.setAuthorId(getCurrentUserId());
         comment.setTicket(ticket);
 
-        return commentRepository.save(comment);
+        TicketComment saved = commentRepository.save(comment);
+
+        notificationService.notify(
+                UUID.fromString(ticket.getReportedBy()),
+                NotificationType.TICKET_COMMENT_ADDED,
+                "New Comment on Ticket",
+                "A new comment was added to your ticket",
+                UUID.fromString(ticket.getId()),
+                ReferenceType.TICKET
+        );
+
+        return saved;
     }
 
     // GET COMMENTS (Owner + Technician + Admin)
