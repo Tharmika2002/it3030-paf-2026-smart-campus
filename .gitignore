@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Frontend ###
+smartcampus-frontend/node_modules/
+smartcampus-frontend/.env
+smartcampus-frontend/.env.local
+smartcampus-frontend/dist/
