@@ -37,3 +37,8 @@ smartcampus-frontend/node_modules/
 smartcampus-frontend/.env
 smartcampus-frontend/.env.local
 smartcampus-frontend/dist/
+
+### Backend local secrets ###
+smartcampus-backend/src/main/resources/application-local.properties
+
+smartcampus-frontend/.vite/
