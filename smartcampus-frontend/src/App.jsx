@@ -13,6 +13,9 @@ import ResourceFormPage from './pages/resources/ResourceFormPage'
 import PlaceholderPage from './pages/PlaceholderPage'
 import UsersPage from './pages/admin/UsersPage'
 import NotificationsPage from './pages/NotificationsPage'
+import BookingsPage from './pages/bookings/BookingsPage'
+import BookingFormPage from './pages/bookings/BookingFormPage'
+import BookingDetailPage from './pages/bookings/BookingDetailPage'
 
 import TicketsPage from './pages/tickets/TicketsPage'
 import TicketDetailPage from './pages/tickets/TicketDetailPage'
@@ -63,11 +66,15 @@ export default function App() {
                 <ProtectedRoute requiredRole="ADMIN"><ResourceFormPage /></ProtectedRoute>
               } />
 
-              {/* Module B — Bookings (placeholder) */}
-              <Route path="/bookings/*" element={
-                <ProtectedRoute>
-                  <PlaceholderPage title="Bookings" subtitle="Manage your room and equipment bookings" />
-                </ProtectedRoute>
+              {/* Module B — Bookings */}
+              <Route path="/bookings" element={
+                <ProtectedRoute><BookingsPage /></ProtectedRoute>
+              } />
+              <Route path="/bookings/new" element={
+                <ProtectedRoute><BookingFormPage /></ProtectedRoute>
+              } />
+              <Route path="/bookings/:id" element={
+                <ProtectedRoute><BookingDetailPage /></ProtectedRoute>
               } />
 
               {/* Module C — Tickets  */}
