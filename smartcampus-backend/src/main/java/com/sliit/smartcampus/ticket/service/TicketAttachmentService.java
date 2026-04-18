@@ -1,6 +1,9 @@
 package com.sliit.smartcampus.ticket.service;
 
 import com.sliit.smartcampus.auth.UserPrincipal;
+import com.sliit.smartcampus.notification.NotificationService;
+import com.sliit.smartcampus.notification.NotificationType;
+import com.sliit.smartcampus.notification.ReferenceType;
 import com.sliit.smartcampus.ticket.entity.Ticket;
 import com.sliit.smartcampus.ticket.entity.TicketAttachment;
 import com.sliit.smartcampus.ticket.repository.TicketAttachmentRepository;
@@ -26,9 +29,13 @@ public class TicketAttachmentService {
     @Autowired
     private TicketRepository ticketRepository;
 
-    private final String uploadDir = System.getProperty("user.dir") + "/uploads/";
+    @Autowired
+    private NotificationService notificationService;
 
-    // Get current user
+    private final String uploadDir =
+            System.getProperty("user.dir") + File.separator + "uploads" + File.separator;
+
+    // ================= AUTH =================
     private UserPrincipal getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
@@ -43,24 +50,30 @@ public class TicketAttachmentService {
         return getCurrentUser().getId().toString();
     }
 
-    // UPLOAD (Owner + Technician + Admin)
+    // ================= UPLOAD =================
     public TicketAttachment uploadFile(String ticketId, MultipartFile file) throws IOException {
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
+        // Prevent upload
+        if ("CLOSED".equals(ticket.getStatus()) || "REJECTED".equals(ticket.getStatus())) {
+            throw new RuntimeException("Cannot upload files to closed/rejected ticket");
+        }
+
         UserPrincipal user = getCurrentUser();
 
-        boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
-        boolean isTechnician = user.getRole().equals("TECHNICIAN");
-        boolean isAdmin = user.getRole().equals("ADMIN");
+        boolean isOwner = ticket.getReportedBy().equals(getCurrentUserId());
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                ticket.getAssignedTo().equals(getCurrentUserId());
+        boolean isAdmin = "ADMIN".equals(user.getRole());
 
-        if (!isOwner && !isTechnician && !isAdmin) {
+        if (!isOwner && !isAssigned && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
-        // validations
-        if (attachmentRepository.countByTicketId(ticketId) >= 3) {
+        // ================= VALIDATION =================
+        if (attachmentRepository.countByTicket_Id(ticketId) >= 3) {
             throw new RuntimeException("Max 3 files allowed");
         }
 
@@ -74,13 +87,16 @@ public class TicketAttachmentService {
             throw new RuntimeException("Max 5MB allowed");
         }
 
+        // ================= SAVE FILE =================
         String storedName = UUID.randomUUID() + "_" + file.getOriginalFilename();
 
         File dir = new File(uploadDir);
         if (!dir.exists()) dir.mkdirs();
 
-        file.transferTo(new File(uploadDir + storedName));
+        File savedFile = new File(uploadDir + storedName);
+        file.transferTo(savedFile);
 
+        // ================= SAVE DB =================
         TicketAttachment attachment = new TicketAttachment();
         attachment.setFileName(file.getOriginalFilename());
         attachment.setStoredName(storedName);
@@ -88,10 +104,44 @@ public class TicketAttachmentService {
         attachment.setFileSize(file.getSize());
         attachment.setTicket(ticket);
 
-        return attachmentRepository.save(attachment);
+        TicketAttachment saved = attachmentRepository.save(attachment);
+
+        // ================= NOTIFICATIONS =================
+
+        // OWNER
+        try {
+            notificationService.notify(
+                    UUID.fromString(ticket.getReportedBy()),
+                    NotificationType.TICKET_COMMENT_ADDED,
+                    "New Attachment Added",
+                    "A new attachment has been uploaded.\n\n" +
+                            "Ticket: " + ticket.getTitle() +
+                            "\nUploaded by: " + user.getRole() +
+                            "\nFile: " + file.getOriginalFilename(),
+                    UUID.fromString(ticket.getId()),
+                    ReferenceType.TICKET
+            );
+        } catch (Exception ignored) {}
+
+        // TECHNICIAN
+        if (ticket.getAssignedTo() != null) {
+            try {
+                notificationService.notify(
+                        UUID.fromString(ticket.getAssignedTo()),
+                        NotificationType.TICKET_COMMENT_ADDED,
+                        "Attachment Added to Assigned Ticket",
+                        "A new attachment has been added.\n\n" +
+                                "Ticket: " + ticket.getTitle(),
+                        UUID.fromString(ticket.getId()),
+                        ReferenceType.TICKET
+                );
+            } catch (Exception ignored) {}
+        }
+
+        return saved;
     }
 
-    // DELETE (Owner + Admin)
+    // ================= DELETE =================
     public void deleteAttachment(String attachmentId) {
 
         TicketAttachment attachment = attachmentRepository.findById(attachmentId)
@@ -99,8 +149,8 @@ public class TicketAttachmentService {
 
         UserPrincipal user = getCurrentUser();
 
-        boolean isOwner = attachment.getTicket().getReportedBy().equals(user.getId().toString());
-        boolean isAdmin = user.getRole().equals("ADMIN");
+        boolean isOwner = attachment.getTicket().getReportedBy().equals(getCurrentUserId());
+        boolean isAdmin = "ADMIN".equals(user.getRole());
 
         if (!isOwner && !isAdmin) {
             throw new RuntimeException("Access denied");
@@ -112,7 +162,7 @@ public class TicketAttachmentService {
         attachmentRepository.deleteById(attachmentId);
     }
 
-    // GET (Owner + Technician + Admin)
+    // ================= GET =================
     public List<TicketAttachment> getAttachmentsByTicket(String ticketId) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
@@ -120,14 +170,35 @@ public class TicketAttachmentService {
 
         UserPrincipal user = getCurrentUser();
 
-        boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
-        boolean isTechnician = user.getRole().equals("TECHNICIAN");
-        boolean isAdmin = user.getRole().equals("ADMIN");
+        boolean isOwner = ticket.getReportedBy().equals(getCurrentUserId());
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                ticket.getAssignedTo().equals(getCurrentUserId());
+        boolean isAdmin = "ADMIN".equals(user.getRole());
 
-        if (!isOwner && !isTechnician && !isAdmin) {
+        if (!isOwner && !isAssigned && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
-        return attachmentRepository.findByTicketId(ticketId);
+        return attachmentRepository.findByTicket_Id(ticketId);
+    }
+
+    // ================= GET FILE =================
+    public File getFileById(String attachmentId) {
+
+        TicketAttachment attachment = attachmentRepository.findById(attachmentId)
+                .orElseThrow(() -> new RuntimeException("Attachment not found"));
+
+        UserPrincipal user = getCurrentUser();
+
+        boolean isOwner = attachment.getTicket().getReportedBy().equals(getCurrentUserId());
+        boolean isAssigned = attachment.getTicket().getAssignedTo() != null &&
+                attachment.getTicket().getAssignedTo().equals(getCurrentUserId());
+        boolean isAdmin = "ADMIN".equals(user.getRole());
+
+        if (!isOwner && !isAssigned && !isAdmin) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return new File(uploadDir + attachment.getStoredName());
     }
 }

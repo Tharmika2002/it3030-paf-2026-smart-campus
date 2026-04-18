@@ -14,6 +14,10 @@ import PlaceholderPage from './pages/PlaceholderPage'
 import UsersPage from './pages/admin/UsersPage'
 import NotificationsPage from './pages/NotificationsPage'
 
+import TicketsPage from './pages/tickets/TicketsPage'
+import TicketDetailPage from './pages/tickets/TicketDetailPage'
+import CreateTicketPage from './pages/tickets/CreateTicketPage'
+
 export default function App() {
   return (
       <ThemeProvider>
@@ -66,12 +70,19 @@ export default function App() {
                 </ProtectedRoute>
               } />
 
-              {/* Module C — Tickets (placeholder) */}
-              <Route path="/tickets/*" element={
-                <ProtectedRoute>
-                  <PlaceholderPage title="Tickets" subtitle="Report and track maintenance incidents" />
-                </ProtectedRoute>
+              {/* Module C — Tickets  */}
+              <Route path="/tickets" element={
+                <ProtectedRoute><TicketsPage /></ProtectedRoute>
               } />
+
+              <Route path="/tickets/new" element={
+                <ProtectedRoute><CreateTicketPage /></ProtectedRoute>
+              } />
+
+              <Route path="/tickets/:id" element={
+                <ProtectedRoute><TicketDetailPage /></ProtectedRoute>
+              } />
+
 
               {/* Module D — Notifications */}
               <Route path="/notifications" element={
@@ -95,6 +106,7 @@ export default function App() {
               {/* Redirects */}
               <Route path="/" element={<Navigate to="/resources" replace />} />
               <Route path="*" element={<Navigate to="/resources" replace />} />
+              <Route path="/tickets/*" element={<Navigate to="/tickets" replace />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>

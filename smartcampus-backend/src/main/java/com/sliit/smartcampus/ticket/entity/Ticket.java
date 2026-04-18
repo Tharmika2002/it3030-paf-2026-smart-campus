@@ -2,6 +2,9 @@ package com.sliit.smartcampus.ticket.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,15 +18,16 @@ public class Ticket {
     @Column(nullable = false)
     private String title;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 2000)
     private String description;
 
     private String category;
     private String priority;
 
     @Column(nullable = false)
-    private String status; // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+    private String status;
 
+    @Column(nullable = false)
     private String location;
 
     private String contactDetails;
@@ -33,10 +37,17 @@ public class Ticket {
 
     private String resolutionNote;
 
+    private LocalDateTime firstResponseAt;
+    private LocalDateTime resolvedAt;
+
+    @CreationTimestamp
     private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 
     @PrePersist
     public void onCreate() {
-        this.createdAt = LocalDateTime.now();
+        this.status = "OPEN";
     }
 }

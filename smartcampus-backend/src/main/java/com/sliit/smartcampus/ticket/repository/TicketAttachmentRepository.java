@@ -6,8 +6,7 @@ import java.util.List;
 
 public interface TicketAttachmentRepository extends JpaRepository<TicketAttachment, String> {
 
-    long countByTicketId(String ticketId);
+    long countByTicket_Id(String ticketId); //
 
-    List<TicketAttachment> findByTicketId(String ticketId);
-
+    List<TicketAttachment> findByTicket_Id(String ticketId); //
 }

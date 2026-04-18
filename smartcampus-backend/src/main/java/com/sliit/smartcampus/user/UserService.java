@@ -57,4 +57,11 @@ public class UserService {
                 .createdAt(user.getCreatedAt())
                 .build();
     }
+
+    public List<UserResponseDTO> getTechnicians() {
+        return userRepository.findByRole(Role.TECHNICIAN)
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
 }

@@ -6,6 +6,6 @@ import lombok.Data;
 @Data
 public class AssignRequest {
 
-    @NotBlank(message = "Technician ID is required")
+    @NotBlank(message = "Technician ID required")
     private String technicianId;
 }
