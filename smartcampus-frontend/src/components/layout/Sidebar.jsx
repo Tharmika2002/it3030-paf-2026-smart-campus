@@ -1,18 +1,21 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import {
   LayoutDashboard, Building2, CalendarCheck, Wrench,
-  Bell, Users, BarChart3, Sun, Moon, LogOut, ChevronRight, Zap
+  Bell, Users, BarChart3, Sun, Moon, LogOut, ChevronRight, Zap, ListChecks
 } from 'lucide-react'
 import { getRoleBadgeColor } from '../../utils/roleUtils'
+import { waitlistApi } from '../../api/waitlistApi'
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard', roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
-  { icon: Building2, label: 'Resources', to: '/resources', roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
-  { icon: CalendarCheck, label: 'Bookings', to: '/bookings', roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
-  { icon: Wrench, label: 'Tickets', to: '/tickets', roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
-  { icon: Bell, label: 'Notifications', to: '/notifications', roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
+  { icon: LayoutDashboard, label: 'Dashboard',     to: '/dashboard',     roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
+  { icon: Building2,       label: 'Resources',     to: '/resources',     roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
+  { icon: CalendarCheck,   label: 'Bookings',      to: '/bookings',      roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
+  { icon: ListChecks,      label: 'Waitlist',      to: '/waitlist',      roles: ['USER','TECHNICIAN','MANAGER','ADMIN'], badge: true },
+  { icon: Wrench,          label: 'Tickets',       to: '/tickets',       roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
+  { icon: Bell,            label: 'Notifications', to: '/notifications', roles: ['USER','TECHNICIAN','MANAGER','ADMIN'] },
 ]
 
 const adminItems = [
@@ -24,6 +27,21 @@ export default function Sidebar() {
   const { user, logout, isAdmin, isManager } = useAuth()
   const { dark, toggle } = useTheme()
   const navigate = useNavigate()
+  const [waitlistCount, setWaitlistCount] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    waitlistApi.getActiveCount()
+      .then(res => setWaitlistCount(res.data?.activeCount || 0))
+      .catch(() => {})
+    // refresh badge every 60 seconds
+    const id = setInterval(() => {
+      waitlistApi.getActiveCount()
+        .then(res => setWaitlistCount(res.data?.activeCount || 0))
+        .catch(() => {})
+    }, 60000)
+    return () => clearInterval(id)
+  }, [user])
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -58,7 +76,7 @@ export default function Sidebar() {
           Main
         </p>
         <ul className="space-y-1">
-          {navItems.map(({ icon: Icon, label, to }) => (
+          {navItems.map(({ icon: Icon, label, to, badge }) => (
             <li key={to}>
               <NavLink
                 to={to}
@@ -72,7 +90,13 @@ export default function Sidebar() {
               >
                 <Icon size={16} className="flex-shrink-0" />
                 <span className="font-body">{label}</span>
-                <ChevronRight size={12} className="ml-auto opacity-0 group-hover:opacity-50 transition-opacity" />
+                {badge && waitlistCount > 0 ? (
+                  <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500 text-white min-w-[18px] text-center">
+                    {waitlistCount}
+                  </span>
+                ) : (
+                  <ChevronRight size={12} className="ml-auto opacity-0 group-hover:opacity-50 transition-opacity" />
+                )}
               </NavLink>
             </li>
           ))}

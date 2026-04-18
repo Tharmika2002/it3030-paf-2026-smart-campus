@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CalendarCheck, Plus, Loader2, Eye, XCircle, Trash2,
-  Clock, MapPin, User, Filter, ChevronDown
+  Clock, MapPin, User, ListChecks
 } from 'lucide-react'
 import Layout from '../../components/layout/Layout'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import { bookingApi } from '../../api/bookingApi'
+import { waitlistApi } from '../../api/waitlistApi'
+import WaitlistList from '../../components/booking/waitlist/WaitlistList'
+import WaitlistAdminTable from '../../components/booking/waitlist/WaitlistAdminTable'
 import toast from 'react-hot-toast'
 
 const STATUS_COLORS = {
@@ -35,7 +38,8 @@ function StatusBadge({ status, dark }) {
   )
 }
 
-const TABS = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']
+const BOOKING_TABS = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']
+const PAGE_TABS    = ['BOOKINGS', 'WAITLIST']
 
 export default function BookingsPage() {
   const { dark } = useTheme()
@@ -44,11 +48,32 @@ export default function BookingsPage() {
 
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activePage, setActivePage] = useState('BOOKINGS')
   const [activeTab, setActiveTab] = useState('ALL')
   const [deletingId, setDeletingId] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
+
+  // Waitlist state (for user view in this page)
+  const [waitlistEntries, setWaitlistEntries] = useState([])
+  const [waitlistLoading, setWaitlistLoading] = useState(false)
+
+  const fetchWaitlist = async () => {
+    setWaitlistLoading(true)
+    try {
+      const res = await waitlistApi.getMyWaitlist()
+      setWaitlistEntries(res.data?.data || [])
+    } catch {
+      toast.error('Failed to load waitlist')
+    } finally {
+      setWaitlistLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activePage === 'WAITLIST' && !isAdmin()) fetchWaitlist()
+  }, [activePage])
 
   const fetchBookings = async () => {
     setLoading(true)
@@ -71,6 +96,29 @@ export default function BookingsPage() {
   }
 
   useEffect(() => { fetchBookings() }, [activeTab, isAdmin])
+
+  const handleWaitlistRemove = async (id) => {
+    if (!window.confirm('Remove yourself from this waitlist?')) return
+    try {
+      await waitlistApi.remove(id)
+      setWaitlistEntries(prev => prev.map(e => e.id === id ? { ...e, status: 'REMOVED' } : e))
+      toast.success('Removed from waitlist')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to remove')
+    }
+  }
+
+  const handleWaitlistConfirm = async (id) => {
+    try {
+      await waitlistApi.confirm(id)
+      setWaitlistEntries(prev => prev.map(e => e.id === id ? { ...e, status: 'CONFIRMED' } : e))
+      toast.success('Confirmed! Booking is now pending approval.')
+      navigate('/bookings')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to confirm')
+      fetchWaitlist()
+    }
+  }
 
   const filtered = activeTab === 'ALL' || isAdmin()
     ? bookings
@@ -133,9 +181,28 @@ export default function BookingsPage() {
           </button>
         </div>
 
-        {/* Status tabs */}
+        {/* Page-level tabs: Bookings | Waitlist */}
         <div className={`flex gap-1 p-1 rounded-xl ${dark ? 'bg-[#16162a] border border-[#2a2a45]' : 'bg-gray-100'}`}>
-          {TABS.map(tab => (
+          {PAGE_TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActivePage(tab)}
+              className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg transition-all ${
+                activePage === tab
+                  ? dark ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700 shadow-sm'
+                  : dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab === 'WAITLIST' && <ListChecks size={12} />}
+              {tab === 'BOOKINGS' ? (isAdmin() ? 'All Bookings' : 'My Bookings') : 'My Waitlist'}
+            </button>
+          ))}
+        </div>
+
+        {/* Booking status sub-tabs — only shown on BOOKINGS tab */}
+        {activePage === 'BOOKINGS' && (
+        <div className={`flex gap-1 p-1 rounded-xl ${dark ? 'bg-[#16162a] border border-[#2a2a45]' : 'bg-gray-100'}`}>
+          {BOOKING_TABS.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -149,9 +216,32 @@ export default function BookingsPage() {
             </button>
           ))}
         </div>
+        )}
 
-        {/* Bookings list */}
-        <div className={card}>
+        {/* ── WAITLIST TAB ─────────────────────────────────────────────── */}
+        {activePage === 'WAITLIST' && (
+          <div>
+            {isAdmin() ? (
+              <WaitlistAdminTable dark={dark} />
+            ) : waitlistLoading ? (
+              <div className="flex items-center justify-center py-16 gap-2">
+                <Loader2 size={16} className="animate-spin text-indigo-400" />
+                <span className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Loading waitlist…</span>
+              </div>
+            ) : (
+              <WaitlistList
+                entries={waitlistEntries}
+                dark={dark}
+                onRemove={handleWaitlistRemove}
+                onConfirm={handleWaitlistConfirm}
+                emptyMessage="You are not on any waitlists yet. Join one when a booking conflicts!"
+              />
+            )}
+          </div>
+        )}
+
+        {/* ── BOOKINGS TAB ─────────────────────────────────────────────── */}
+        {activePage === 'BOOKINGS' && <div className={card}>
           {loading ? (
             <div className="flex items-center justify-center py-16 gap-2">
               <Loader2 size={16} className="animate-spin text-indigo-400" />
@@ -252,7 +342,7 @@ export default function BookingsPage() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Cancel modal */}
