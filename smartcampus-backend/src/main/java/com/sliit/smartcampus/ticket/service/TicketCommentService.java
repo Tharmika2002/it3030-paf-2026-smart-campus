@@ -24,12 +24,12 @@ public class TicketCommentService {
     private TicketCommentRepository commentRepository;
 
     @Autowired
-    private NotificationService notificationService;
-
-    @Autowired
     private TicketRepository ticketRepository;
 
-    // Get current user object
+    @Autowired
+    private NotificationService notificationService;
+
+    // GET CURRENT USER
     private UserPrincipal getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
@@ -44,44 +44,72 @@ public class TicketCommentService {
         return getCurrentUser().getId().toString();
     }
 
-    // ADD COMMENT (Owner + Technician + Admin)
+    // ADD COMMENT
     public TicketComment addComment(String ticketId, TicketComment comment) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
         if (ticket.getStatus().equals("REJECTED") || ticket.getStatus().equals("CLOSED")) {
-            throw new RuntimeException("Cannot add comment to rejected/closed ticket");
+            throw new RuntimeException("Cannot add comment to closed/rejected ticket");
         }
 
         UserPrincipal user = getCurrentUser();
 
         boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
-        boolean isTechnician = user.getRole().equals("TECHNICIAN");
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                ticket.getAssignedTo().equals(user.getId().toString());
         boolean isAdmin = user.getRole().equals("ADMIN");
 
-        if (!isOwner && !isTechnician && !isAdmin) {
+        if (!isOwner && !isAssigned && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
-        comment.setAuthorId(getCurrentUserId());
+        //  INTERNAL COMMENT CHECK
+        if (comment.isInternal()) {
+            if (!(isAdmin || isAssigned)) {
+                throw new RuntimeException("Only admin/technician can add internal comments");
+            }
+        }
+
+        //  SET AUTHOR DETAILS (VERY IMPORTANT)
+        comment.setAuthorId(user.getId().toString());
+        comment.setAuthorName(user.getName());
+        comment.setAuthorRole(user.getRole());
+
         comment.setTicket(ticket);
 
         TicketComment saved = commentRepository.save(comment);
 
+        // NOTIFY OWNER
         notificationService.notify(
                 UUID.fromString(ticket.getReportedBy()),
                 NotificationType.TICKET_COMMENT_ADDED,
                 "New Comment on Ticket",
-                "A new comment was added to your ticket",
+                "A new comment has been added.\n\n" +
+                        "Title: " + ticket.getTitle() +
+                        "\nBy: " + user.getRole() +
+                        "\nComment: " + saved.getContent(),
                 UUID.fromString(ticket.getId()),
                 ReferenceType.TICKET
         );
 
+        // NOTIFY TECHNICIAN
+        if (ticket.getAssignedTo() != null) {
+            notificationService.notify(
+                    UUID.fromString(ticket.getAssignedTo()),
+                    NotificationType.TICKET_COMMENT_ADDED,
+                    "New Comment",
+                    "New comment added to assigned ticket",
+                    UUID.fromString(ticket.getId()),
+                    ReferenceType.TICKET
+            );
+        }
+
         return saved;
     }
 
-    // GET COMMENTS (Owner + Technician + Admin)
+    // GET COMMENTS
     public List<TicketComment> getComments(String ticketId) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
@@ -90,17 +118,29 @@ public class TicketCommentService {
         UserPrincipal user = getCurrentUser();
 
         boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
-        boolean isTechnician = user.getRole().equals("TECHNICIAN");
+
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                ticket.getAssignedTo().equals(user.getId().toString());
+
         boolean isAdmin = user.getRole().equals("ADMIN");
 
-        if (!isOwner && !isTechnician && !isAdmin) {
+        // ACCESS CONTROL
+        if (!isOwner && !isAssigned && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
-        return commentRepository.findByTicketId(ticketId);
+        // USER → only public comments
+        if (isOwner) {
+            return commentRepository
+                    .findByTicket_IdAndIsInternalFalseOrderByCreatedAtAsc(ticketId);
+        }
+
+        // ADMIN / TECH → all comments
+        return commentRepository
+                .findByTicket_IdOrderByCreatedAtAsc(ticketId);
     }
 
-    // UPDATE (ONLY AUTHOR)
+    // UPDATE COMMENT
     public TicketComment updateComment(String id, String content) {
 
         TicketComment comment = commentRepository.findById(id)
@@ -115,7 +155,7 @@ public class TicketCommentService {
         return commentRepository.save(comment);
     }
 
-    // DELETE (ONLY AUTHOR)
+    // DELETE COMMENT
     public void deleteComment(String id) {
 
         TicketComment comment = commentRepository.findById(id)

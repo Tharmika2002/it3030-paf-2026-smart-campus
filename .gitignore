@@ -38,6 +38,7 @@ smartcampus-frontend/.env
 smartcampus-frontend/.env.local
 smartcampus-frontend/dist/
 
+uploads/
 ### Backend local secrets ###
 smartcampus-backend/src/main/resources/application-local.properties
 

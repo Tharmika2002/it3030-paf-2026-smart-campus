@@ -6,6 +6,7 @@ import com.sliit.smartcampus.notification.NotificationType;
 import com.sliit.smartcampus.notification.ReferenceType;
 import com.sliit.smartcampus.ticket.entity.Ticket;
 import com.sliit.smartcampus.ticket.repository.TicketRepository;
+import com.sliit.smartcampus.user.Role;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
@@ -24,23 +25,19 @@ public class TicketService {
     @Autowired
     private NotificationService notificationService;
 
-    // GET CURRENT USER OBJECT
     private UserPrincipal getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
         if (auth == null || !(auth.getPrincipal() instanceof UserPrincipal user)) {
             throw new RuntimeException("Unauthorized user");
         }
-
         return user;
     }
 
-    // GET CURRENT USER ID
     private String getCurrentUserId() {
         return getCurrentUser().getId().toString();
     }
 
-    // CREATE
+    // ================= CREATE =================
     public Ticket createTicket(Ticket ticket) {
 
         ticket.setReportedBy(getCurrentUserId());
@@ -48,18 +45,38 @@ public class TicketService {
 
         Ticket saved = ticketRepository.save(ticket);
 
+        UUID ticketId = UUID.fromString(saved.getId());
+        UUID userId = UUID.fromString(saved.getReportedBy());
+
+        // Notify ADMINS
         notificationService.notifyAllAdmins(
                 NotificationType.TICKET_STATUS_CHANGED,
                 "New Ticket Created",
-                "A new ticket has been created",
-                UUID.fromString(saved.getId()),
+                "A new ticket has been created.\n\n" +
+                        "Title: " + saved.getTitle() +
+                        "\nLocation: " + saved.getLocation() +
+                        "\nPriority: " + saved.getPriority(),
+                ticketId,
+                ReferenceType.TICKET
+        );
+
+        // Notify USER
+        notificationService.notify(
+                userId,
+                NotificationType.TICKET_STATUS_CHANGED,
+                "Ticket Created Successfully",
+                "Your ticket has been successfully created.\n\n" +
+                        "Title: " + saved.getTitle() +
+                        "\nStatus: OPEN" +
+                        "\nLocation: " + saved.getLocation(),
+                ticketId,
                 ReferenceType.TICKET
         );
 
         return saved;
     }
 
-    // GET MY TICKETS (WITH SORT)
+    // ================= GET =================
     public List<Ticket> getMyTickets() {
         return ticketRepository.findByReportedBy(
                 getCurrentUserId(),
@@ -67,35 +84,64 @@ public class TicketService {
         );
     }
 
-    // ADMIN
     public List<Ticket> getAllTickets() {
 
         UserPrincipal user = getCurrentUser();
 
-        if (!user.getRole().equals("ADMIN") && !user.getRole().equals("TECHNICIAN")) {
-            throw new RuntimeException("Access denied");
+        // ADMIN → see ALL
+        if (user.getRole().equals("ADMIN")) {
+            return ticketRepository.findAll(
+                    Sort.by(Sort.Direction.DESC, "createdAt")
+            );
         }
 
-        return ticketRepository.findAll(
-                Sort.by(Sort.Direction.DESC, "createdAt")
-        );
+        // TECHNICIAN → ONLY assigned tickets
+        if (user.getRole().equals("TECHNICIAN")) {
+            return ticketRepository.findByAssignedTo(
+                    user.getId().toString(),
+                    Sort.by(Sort.Direction.DESC, "createdAt")
+            );
+        }
+
+        throw new RuntimeException("Access denied");
     }
-    // GET BY ID (ONLY OWNER)
+
     public Ticket getTicketById(String id) {
 
         Ticket ticket = ticketRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        if (!ticket.getReportedBy().equals(getCurrentUserId())) {
+        UserPrincipal user = getCurrentUser();
+
+        String userId = user.getId().toString();
+        String role = user.getRole();
+
+        boolean isOwner = userId.equals(ticket.getReportedBy());
+
+        boolean isAssigned = ticket.getAssignedTo() != null &&
+                ticket.getAssignedTo().equals(userId);
+
+        boolean isAdmin = "ADMIN".equals(role);
+
+
+        System.out.println("===== ACCESS DEBUG =====");
+        System.out.println("User ID: " + userId);
+        System.out.println("Ticket Owner: " + ticket.getReportedBy());
+        System.out.println("Assigned To: " + ticket.getAssignedTo());
+        System.out.println("Role: " + role);
+        System.out.println("isOwner: " + isOwner);
+        System.out.println("isAssigned: " + isAssigned);
+        System.out.println("isAdmin: " + isAdmin);
+
+        if (!isOwner && !isAssigned && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
         return ticket;
     }
 
-    // DELETE (ONLY OWNER)
+    // ================= DELETE =================
     public void deleteTicket(String id) {
-
         Ticket ticket = ticketRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
@@ -106,68 +152,27 @@ public class TicketService {
         ticketRepository.deleteById(id);
     }
 
-    // UPDATE STATUS (OWNER + TECHNICIAN)
+    // ================= STATUS UPDATE =================
     public Ticket updateStatus(String ticketId, String newStatus, String resolutionNote) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        if (newStatus.equals("REJECTED")) {
-            if (resolutionNote == null || resolutionNote.isEmpty()) {
-                throw new RuntimeException("Rejection reason is required");
-            }
-
-            ticket.setStatus("REJECTED");
-            ticket.setResolutionNote(resolutionNote);
-
-            Ticket saved = ticketRepository.save(ticket);
-
-            notificationService.notify(
-                    UUID.fromString(saved.getReportedBy()),
-                    NotificationType.TICKET_STATUS_CHANGED,
-                    "Ticket Status Updated",
-                    "Your ticket status is now " + newStatus,
-                    UUID.fromString(saved.getId()),
-                    ReferenceType.TICKET
-            );
-
-            return saved;
-        }
-
         UserPrincipal user = getCurrentUser();
 
         boolean isOwner = ticket.getReportedBy().equals(user.getId().toString());
-        boolean isAssignedTech = user.getId().toString().equals(ticket.getAssignedTo());
+        boolean isAssigned = user.getId().toString().equals(ticket.getAssignedTo());
         boolean isAdmin = user.getRole().equals("ADMIN");
 
-        if (!isOwner && !isAssignedTech && !isAdmin) {
+        if (!isOwner && !isAssigned && !isAdmin) {
             throw new RuntimeException("Access denied");
         }
 
-        String currentStatus = ticket.getStatus();
+        ticket.setStatus(newStatus);
 
-        // WORKFLOW VALIDATION
-        if (currentStatus.equals("OPEN") && !newStatus.equals("IN_PROGRESS")) {
-            throw new RuntimeException("OPEN → IN_PROGRESS only");
-        }
-
-        if (currentStatus.equals("IN_PROGRESS") && !newStatus.equals("RESOLVED")) {
-            throw new RuntimeException("IN_PROGRESS → RESOLVED only");
-        }
-
-        if (currentStatus.equals("RESOLVED") && !newStatus.equals("CLOSED")) {
-            throw new RuntimeException("RESOLVED → CLOSED only");
-        }
-
-        // RESOLUTION NOTE REQUIRED
-        if (newStatus.equals("RESOLVED") || newStatus.equals("CLOSED")) {
-            if (resolutionNote == null || resolutionNote.isEmpty()) {
-                throw new RuntimeException("Resolution note is required");
-            }
+        if (resolutionNote != null) {
             ticket.setResolutionNote(resolutionNote);
         }
-
-        ticket.setStatus(newStatus);
 
         Ticket saved = ticketRepository.save(ticket);
 
@@ -175,7 +180,10 @@ public class TicketService {
                 UUID.fromString(saved.getReportedBy()),
                 NotificationType.TICKET_STATUS_CHANGED,
                 "Ticket Status Updated",
-                "Your ticket status is now " + newStatus,
+                "Your ticket has been updated.\n\n" +
+                        "Title: " + saved.getTitle() +
+                        "\nNew Status: " + newStatus +
+                        "\nUpdated by: " + user.getRole(),
                 UUID.fromString(saved.getId()),
                 ReferenceType.TICKET
         );
@@ -183,7 +191,7 @@ public class TicketService {
         return saved;
     }
 
-    // ASSIGN TECHNICIAN (OWNER OR ADMIN)
+    // ================= ASSIGN =================
     public Ticket assignTechnician(String ticketId, String technicianId) {
 
         Ticket ticket = ticketRepository.findById(ticketId)
@@ -205,8 +213,11 @@ public class TicketService {
         notificationService.notify(
                 UUID.fromString(technicianId),
                 NotificationType.TICKET_ASSIGNED,
-                "Ticket Assigned",
-                "You have been assigned a new ticket",
+                "New Ticket Assigned",
+                "You have been assigned a ticket.\n\n" +
+                        "Title: " + saved.getTitle() +
+                        "\nLocation: " + saved.getLocation() +
+                        "\nPriority: " + saved.getPriority(),
                 UUID.fromString(saved.getId()),
                 ReferenceType.TICKET
         );

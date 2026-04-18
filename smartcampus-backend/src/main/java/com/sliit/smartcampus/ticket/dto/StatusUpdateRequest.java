@@ -7,10 +7,10 @@ import lombok.Data;
 @Data
 public class StatusUpdateRequest {
 
-    @NotBlank(message = "Status is required")
+    @NotBlank
     @Pattern(
             regexp = "OPEN|IN_PROGRESS|RESOLVED|CLOSED|REJECTED",
-            message = "Invalid status value"
+            message = "Invalid status"
     )
     private String status;
 

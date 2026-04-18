@@ -9,4 +9,6 @@ import java.util.List;
 public interface TicketRepository extends JpaRepository<Ticket, String> {
 
     List<Ticket> findByReportedBy(String userId, Sort sort);
+
+    List<Ticket> findByAssignedTo(String technicianId, Sort sort);
 }

@@ -19,42 +19,73 @@ public class UserController {
 
     private final UserService userService;
 
-    // GET /api/v1/users/me
+    // ================= GET CURRENT USER =================
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponseDTO>> getMyProfile(
             @AuthenticationPrincipal UserPrincipal currentUser) {
-        return ResponseEntity.ok(ApiResponse.success(
-                "Profile fetched successfully",
-                userService.getUserById(currentUser.getId())));
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Profile fetched successfully",
+                        userService.getUserById(currentUser.getId())
+                )
+        );
     }
 
-    // PATCH /api/v1/users/me/preferences — NEW
+    // ================= UPDATE NOTIFICATION PREFS =================
     @PatchMapping("/me/preferences")
     public ResponseEntity<ApiResponse<UserResponseDTO>> updatePreferences(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestBody NotifPrefs prefs) {
-        return ResponseEntity.ok(ApiResponse.success(
-                "Preferences updated successfully",
-                userService.updatePreferences(currentUser.getId(), prefs)));
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Preferences updated successfully",
+                        userService.updatePreferences(currentUser.getId(), prefs)
+                )
+        );
     }
 
-    // GET /api/v1/users — ADMIN only
+    // ================= GET ALL USERS (ADMIN) =================
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponseDTO>>> getAllUsers() {
-        return ResponseEntity.ok(ApiResponse.success(
-                "Users fetched successfully",
-                userService.getAllUsers()));
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Users fetched successfully",
+                        userService.getAllUsers()
+                )
+        );
     }
 
-    // PATCH /api/v1/users/{id}/role — ADMIN only
+    // ================= UPDATE ROLE (ADMIN) =================
     @PatchMapping("/{id}/role")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserResponseDTO>> updateRole(
             @PathVariable UUID id,
             @RequestParam Role role) {
-        return ResponseEntity.ok(ApiResponse.success(
-                "Role updated successfully",
-                userService.updateRole(id, role)));
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Role updated successfully",
+                        userService.updateRole(id, role)
+                )
+        );
+    }
+
+    // ================= GET TECHNICIANS (ADMIN) =================
+    @GetMapping("/technicians")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<UserResponseDTO>>> getTechnicians() {
+
+        List<UserResponseDTO> technicians = userService.getTechnicians();
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Technicians fetched successfully",
+                        technicians
+                )
+        );
     }
 }
