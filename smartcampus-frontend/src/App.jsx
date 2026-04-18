@@ -16,6 +16,7 @@ import NotificationsPage from './pages/NotificationsPage'
 import BookingsPage from './pages/bookings/BookingsPage'
 import BookingFormPage from './pages/bookings/BookingFormPage'
 import BookingDetailPage from './pages/bookings/BookingDetailPage'
+import MyWaitlistPage from './pages/MyWaitlistPage'
 
 import TicketsPage from './pages/tickets/TicketsPage'
 import TicketDetailPage from './pages/tickets/TicketDetailPage'
@@ -75,6 +76,11 @@ export default function App() {
               } />
               <Route path="/bookings/:id" element={
                 <ProtectedRoute><BookingDetailPage /></ProtectedRoute>
+              } />
+                
+              {/* Module B — Waitlist */}
+              <Route path="/waitlist" element={
+                <ProtectedRoute><MyWaitlistPage /></ProtectedRoute>
               } />
 
               {/* Module C — Tickets  */}

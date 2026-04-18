@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CalendarPlus, ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
+import { CalendarPlus, ArrowLeft, Loader2, AlertCircle, ListPlus } from 'lucide-react'
 import Layout from '../../components/layout/Layout'
 import { useTheme } from '../../context/ThemeContext'
 import { bookingApi } from '../../api/bookingApi'
 import { resourceApi } from '../../api/resourceApi'
+import WaitlistJoinModal from '../../components/booking/waitlist/WaitlistJoinModal'
 import toast from 'react-hot-toast'
 
 const today = () => new Date().toISOString().split('T')[0]
@@ -26,6 +27,8 @@ export default function BookingFormPage() {
   const [resources, setResources] = useState([])
   const [loadingResources, setLoadingResources] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [showConflictBanner, setShowConflictBanner] = useState(false)
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false)
 
   const [form, setForm] = useState({
     resourceId: searchParams.get('resourceId') || '',
@@ -111,9 +114,10 @@ export default function BookingFormPage() {
       toast.success('Booking request submitted! Awaiting approval.')
       navigate('/bookings')
     } catch (err) {
+      const status = err.response?.status
       const msg = err.response?.data?.message || 'Failed to submit booking'
-      if (msg.toLowerCase().includes('conflict') || msg.toLowerCase().includes('overlap')) {
-        toast.error('This time slot is already booked. Please choose a different time.')
+      if (status === 409 || msg.toLowerCase().includes('conflict') || msg.toLowerCase().includes('overlap')) {
+        setShowConflictBanner(true)
       } else {
         toast.error(msg)
       }
@@ -121,6 +125,8 @@ export default function BookingFormPage() {
       setSubmitting(false)
     }
   }
+
+  const selectedResource = resources.find(r => r.id === form.resourceId)
 
   const card = `rounded-2xl border p-6 ${dark ? 'bg-[#16162a] border-[#2a2a45]' : 'bg-white border-indigo-100 shadow-sm'}`
   const label = `block text-xs font-medium mb-1.5 ${dark ? 'text-gray-400' : 'text-gray-600'}`
@@ -256,6 +262,34 @@ export default function BookingFormPage() {
               Your request will be reviewed by an administrator. You'll receive a notification once it's approved or rejected.
             </div>
 
+            {/* Conflict banner — shown when 409 is returned */}
+            {showConflictBanner && (
+              <div className={`rounded-xl border p-4 ${dark ? 'bg-orange-500/5 border-orange-500/30' : 'bg-orange-50 border-orange-200'}`}>
+                <p className={`text-sm font-semibold mb-1 ${dark ? 'text-orange-300' : 'text-orange-800'}`}>
+                  This resource is already booked for your selected time.
+                </p>
+                <p className={`text-xs mb-3 ${dark ? 'text-orange-400/80' : 'text-orange-700'}`}>
+                  Would you like to join the waitlist? We'll notify you instantly if a slot opens up!
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowWaitlistModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium bg-orange-600 hover:bg-orange-500 text-white transition-all"
+                  >
+                    <ListPlus size={13} /> Join Waitlist
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowConflictBanner(false)}
+                    className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${dark ? 'border-orange-500/30 text-orange-400 hover:text-white' : 'border-orange-200 text-orange-700 hover:bg-orange-100'}`}
+                  >
+                    Choose Different Time
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex gap-3 pt-1">
               <button
@@ -277,6 +311,27 @@ export default function BookingFormPage() {
           </form>
         </div>
       </div>
+
+      {/* Waitlist Join Modal — appears when user chooses to join after conflict */}
+      {showWaitlistModal && (
+        <WaitlistJoinModal
+          dark={dark}
+          prefill={{
+            resourceId:        form.resourceId,
+            resourceName:      selectedResource?.name || 'Selected Resource',
+            date:              form.date,
+            startTime:         form.startTime,
+            endTime:           form.endTime,
+            purpose:           form.purpose,
+            expectedAttendees: form.expectedAttendees,
+          }}
+          onClose={() => setShowWaitlistModal(false)}
+          onSuccess={() => {
+            setShowConflictBanner(false)
+            navigate('/waitlist')
+          }}
+        />
+      )}
     </Layout>
   )
 }

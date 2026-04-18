@@ -10,6 +10,7 @@ import com.sliit.smartcampus.booking.mapper.BookingMapper;
 import com.sliit.smartcampus.booking.model.Booking;
 import com.sliit.smartcampus.booking.model.BookingStatus;
 import com.sliit.smartcampus.booking.repository.BookingRepository;
+import com.sliit.smartcampus.booking.waitlist.service.WaitlistService;
 import com.sliit.smartcampus.notification.NotificationService;
 import com.sliit.smartcampus.notification.NotificationType;
 import com.sliit.smartcampus.notification.ReferenceType;
@@ -38,6 +39,7 @@ public class BookingServiceImpl implements BookingService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final BookingMapper bookingMapper;
+    private final WaitlistService waitlistService;
 
     @Override
     public BookingResponseDTO createBooking(BookingRequestDTO dto, UserPrincipal currentUser) {
@@ -210,6 +212,14 @@ public class BookingServiceImpl implements BookingService {
                         booking.getResource().getName() + "\" on " + booking.getDate() + ".",
                 booking.getId(),
                 ReferenceType.BOOKING
+        );
+
+        // Notify the first person on the waitlist for this slot (if any)
+        waitlistService.notifyNextInWaitlist(
+                booking.getResource().getId(),
+                booking.getDate(),
+                booking.getStartTime(),
+                booking.getEndTime()
         );
 
         return bookingMapper.toDTO(booking);
