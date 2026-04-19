@@ -22,7 +22,6 @@
 - [Environment Configuration](#environment-configuration)
 - [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
-- [Mark Breakdown](#mark-breakdown)
 
 ---
 
