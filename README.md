@@ -331,7 +331,6 @@ app.upload.allowed-types=image/jpeg,image/png,image/webp
 | `PATCH` | `/api/v1/tickets/{id}/assign` | Admin assigns technician |
 | `PUT` | `/api/v1/tickets/{id}/comments/{cid}` | Edit own comment |
 | `DELETE` | `/api/v1/tickets/{id}/comments/{cid}` | Delete comment — ownership enforced |
-| `DELETE` | `/api/v1/tickets/{id}/attachments/{aid}` | Remove attachment |
 
 ### Comment Ownership Rules
 
