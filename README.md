@@ -722,27 +722,5 @@ smart-campus-hub/
 
 ---
 
-## Mark Breakdown
-
-| Criteria | Points | Owner |
-|---|---|---|
-| REST API Design & Implementation | 30 pts | Individual (per module) |
-| Client Application (React) | 15 pts | Individual (per module) |
-| Authentication | 10 pts | Group (Member 4 implements) |
-| Version Control (GitHub) | 10 pts | Group |
-| Innovation (AI features) | 10 pts | Group |
-| **Total** | **75 pts** | |
-
-### Key Viva Talking Points
-
-- **Module A:** Explain the async AI description flow — user gets `201` immediately; `aiSummary` updates seconds later.
-- **Module B:** Explain the conflict detection algorithm and why the conflict check runs **twice** (creation + approval). Most students miss the race condition prevention.
-- **Module B:** Explain the enriched `409` response — instead of a plain error, the body includes AI-suggested alternatives shown as clickable cards in React.
-- **Module C:** Explain UUID filenames and MIME-type validation from file bytes (Apache Tika) — these defend against the two most common file upload attacks.
-- **Module C:** Explain IDOR prevention — verifying `attachment.ticketId == pathVariable ticketId` before serving any file.
-- **Module D&E:** Explain why notifications are persisted to DB **before** the WebSocket push, and what happens when users are offline.
-- **Module D&E:** Explain that JWT claims include `userId`, `email`, and `role` so no DB lookup is needed per request.
-
----
 
 *Smart Campus Operations Hub — IT3030 PAF Assignment 2026 | SLIIT*
